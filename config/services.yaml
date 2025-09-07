@@ -1,0 +1,25 @@
+parameters:
+    storage_directory: '%kernel.project_dir%/storage'
+    ratios_storage_file: '%storage_directory%/pos_ratios.json'
+    app.ratios_api_url: '%env(APP_RATIOS_API_URL)%'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    App\Controller\:
+        resource: '../src/Controller/'
+        tags: ['controller.service_arguments']
+
+    # Autowiring'e hangi string parametresini kullanacağını söylüyoruz
+    App\Repository\PosRatioRepository:
+        arguments:
+            $ratiosApiUrl: '%app.ratios_api_url%'

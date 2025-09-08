@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pos-selection-service-app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+    networks:
+      - pos-selection-network
+
+  nginx:
+    image: nginx:1.21-alpine
+    container_name: pos-selection-service-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www
+      - ./nginx/conf.d:/etc/nginx/conf.d
+    networks:
+      - pos-selection-network
+    depends_on:
+      - app
+
+  redis:
+    image: redis:7-alpine
+    container_name: pos-selection-service-redis
+    restart: always
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - pos-selection-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pos-selection-service-worker
+    restart: unless-stopped
+    working_dir: /var/www
+    # Servis başladığında async kuyruğunu dinleme komutunu çalıştırır.
+    command: php bin/console messenger:consume async --time-limit=3600
+    volumes:
+      - ./:/var/www
+    networks:
+      - pos-selection-network
+    # Worker, çalışmak için hem koda hem de kuyruğa (redis) ihtiyaç duyar.
+    depends_on:
+      - app
+      - redis
+
+networks:
+  pos-selection-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

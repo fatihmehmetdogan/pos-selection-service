@@ -1,0 +1,15 @@
+framework:
+    messenger:
+        # reset services after consuming messages
+        reset_on_message: true
+
+        transports:
+            # https://symfony.com/doc/current/messenger.html#transport-configuration
+            async: '%env(MESSENGER_TRANSPORT_DSN)%'
+            # failed: 'doctrine://default?queue_name=failed'
+            # sync: 'sync://'
+
+        routing:
+            # Bu satır, "UpdatePosRatiosMessage" tipindeki mesajların
+            # "async" isimli taşıyıcıya (yani Redis'e) gönderileceğini belirtir.
+            'App\Message\UpdatePosRatiosMessage': async

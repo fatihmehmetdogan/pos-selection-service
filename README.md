@@ -2,6 +2,15 @@
 
 Bu uygulama, e-ticaret ödeme anında müşterinin kart bilgilerine göre en düşük maliyetli POS sağlayıcısını seçip işlemi o POS'a yönlendiren bir servistir.
 
+### Özellikler
+
+- Farklı POS sağlayıcıları arasından en düşük maliyetli olanı seçme
+- Kart tipi, markası, taksit sayısı ve para birimine göre filtreleme
+- Otomatik komisyon hesaplama ve karşılaştırma
+- Günlük otomatik POS oranı güncelleme
+- Redis cache ile performans optimizasyonu
+- Kuyruk yapısı ile asenkron işlem desteği
+
 ## Kullanılan Teknolojiler
 
 - **Backend:** PHP 8.1, Symfony 5.4
@@ -22,12 +31,12 @@ Bu uygulama, e-ticaret ödeme anında müşterinin kart bilgilerine göre en dü
    docker compose up -d --build
    ```
 
-3.  Composer bağımlılıklarını yükleyin:
+3. Composer bağımlılıklarını yükleyin:
    ```bash
    docker compose exec app composer install
    ```
 
-4.POS oranlarını çekin :
+4. POS oranlarını çekin:
    Uygulamanın çalışması için gerekli olan veriyi ilk kez çekmek üzere aşağıdaki komutu çalıştırın. Bu komut, kuyruğa bir görev ekler ve worker bu görevi işleyerek veriyi günceller.
    ```bash
    docker compose exec app php bin/console app:refresh-pos-ratios
@@ -81,6 +90,47 @@ curl -X POST http://localhost:8080/api/pos/select \
 }
 ```
 
+
+#### Örnek 2: USD, credit, 3 taksit, bonus
+```bash
+curl -X POST http://localhost:8080/api/pos/select \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 395.00, "installment": 3, "currency": "USD", "card_type": "credit", "card_brand": "bonus"}'
+```
+
+**JSON Request:**
+```json
+{
+  "amount": 395.00,
+  "installment": 3,
+  "currency": "USD",
+  "card_type": "credit",
+  "card_brand": "bonus"
+}
+```
+
+**Yanıt:**
+```json
+{
+  "filters": {
+    "amount": 395.0,
+    "installment": 3,
+    "currency": "USD",
+    "card_type": "credit",
+    "card_brand": "bonus"
+  },
+  "overall_min": {
+    "pos_name": "Denizbank",
+    "card_type": "credit",
+    "card_brand": "bonus",
+    "installment": 3,
+    "currency": "USD",
+    "commission_rate": "0.0310",
+    "price": 12.37,
+    "payable_total": 407.37
+  }
+}
+```
 
 ### POS Oranlarını Manuel Güncelleme
 

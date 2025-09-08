@@ -5,64 +5,81 @@ namespace App\Repository;
 use App\config\AppConfig;
 use App\Model\PosRatio;
 use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
+/**
+ * Repository'nin ihtiyaç duyduğu tüm servisleri ve parametreleri constructor üzerinden alıyoruz.
+ *
+ */
 class PosRatioRepository implements PosRatioRepositoryInterface
 {
     private string $storageFilePath;
     private HttpClientInterface $httpClient;
     private LoggerInterface $logger;
     private string $ratiosApiUrl;
+    private CacheInterface $cache;
+
     /**
-     * Repository'nin ihtiyaç duyduğu tüm servisleri ve parametreleri constructor üzerinden alıyoruz.
+     * PosRatioRepository constructor.
      *
      * @param LoggerInterface $logger
      * @param HttpClientInterface $httpClient
      * @param string $ratiosApiUrl
+     * @param CacheInterface $cache
      */
-    public function __construct(
-        LoggerInterface $logger,
-        HttpClientInterface $httpClient,
-        string $ratiosApiUrl
-    ) {
+    public function __construct(LoggerInterface $logger, HttpClientInterface $httpClient, string $ratiosApiUrl, CacheInterface $cache)
+    {
         $this->storageFilePath = AppConfig::POS_RATIOS_STORAGE_PATH;
         $this->httpClient = $httpClient;
         $this->logger = $logger;
         $this->ratiosApiUrl = $ratiosApiUrl;
+        $this->cache = $cache;
     }
 
     /**
-     * @inheritDoc
+     * Tüm POS oranlarını getirir.
+     * Veriyi önce Redis cache'inden okumaya çalışır, bulamazsa dosyadan okur ve cache'i günceller.
+     *
+     * @return PosRatio[]
      */
     public function getAllRatios(): array
     {
-        if (!file_exists($this->storageFilePath)) {
-            $this->updateRatios();
-        }
+        return $this->cache->get('pos_ratios_cache_key', function (ItemInterface $item) {
+            $this->logger->info('Cache miss for POS ratios. Reading from storage file.');
 
-        $rawData = json_decode(file_get_contents($this->storageFilePath), true);
-        if (!is_array($rawData)) {
-            $this->logger->warning('Failed to decode ratios from storage, trying to update from API');
-            $this->updateRatios();
+            $item->expiresAfter(86400); // 86400 saniye = 24 saat
+
+            if (!file_exists($this->storageFilePath)) {
+                $this->updateRatios();
+            }
             $rawData = json_decode(file_get_contents($this->storageFilePath), true);
-        }
 
-        // Eğer ikinci deneme de başarısız olduysa, hata vermemesi için boş dizi döndür.
-        if (!is_array($rawData)) {
-            $this->logger->error('Failed to fetch or decode ratios after retry.');
-            return [];
-        }
+            if (!is_array($rawData)) {
+                $this->logger->warning('Storage file is corrupt or empty, trying to update from API.');
+                $this->updateRatios();
+                $rawData = json_decode(file_get_contents($this->storageFilePath), true);
+            }
 
-        $ratios = [];
-        foreach ($rawData as $item) {
-            $ratios[] = PosRatio::fromArray($item);
-        }
+            if (!is_array($rawData)) {
+                $this->logger->error('Failed to fetch or decode ratios after retry.');
+                return [];
+            }
 
-        return $ratios;
+            $ratios = [];
+            foreach ($rawData as $itemData) {
+                $ratios[] = PosRatio::fromArray($itemData);
+            }
+
+            return $ratios;
+        });
     }
 
     /**
-     * @inheritDoc
+     * API'den oranları günceller, dosyaya yazar ve eski cache'i temizler.
+     *
+     * @return bool
      */
     public function updateRatios(): bool
     {
@@ -84,17 +101,21 @@ class PosRatioRepository implements PosRatioRepositoryInterface
             }
 
             file_put_contents($this->storageFilePath, json_encode($data, JSON_PRETTY_PRINT));
-            $this->logger->info('POS ratios updated successfully', ['count' => count($data)]);
+            $this->logger->info('POS ratios updated successfully', ['count' => count(is_array($data) ? $data : [])]);
+
+            // Veri güncellendiği için, eski cache'i geçersiz kıl (sil).
+            $this->cache->delete('pos_ratios_cache_key');
+            $this->logger->info('POS ratios cache has been invalidated.');
 
             return true;
         } catch (\Exception $e) {
-            $this->logger->error('Error fetching ratios from API: ' . $e->getMessage());
+            $this->logger->error('Error during updateRatios: ' . $e->getMessage());
             return false;
         }
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
     public function filterRatios(array $filters): array
     {

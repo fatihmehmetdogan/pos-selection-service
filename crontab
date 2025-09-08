@@ -1,0 +1,2 @@
+# Her gün İstanbul saatiyle 23:59'da POS oranlarını güncelle
+59 23 * * * www-data /usr/local/bin/php /var/www/bin/console app:refresh-pos-ratios >> /var/www/var/log/cron.log 2>&1

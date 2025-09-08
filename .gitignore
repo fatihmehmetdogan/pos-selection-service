@@ -17,3 +17,7 @@
 /.idea/
 /.vscode/
 ###< IDE specific files ###
+
+.DS_Store
+.env.test
+/storage/pos_ratios.json

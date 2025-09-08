@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build:
@@ -51,15 +49,13 @@ services:
       - ./:/var/www
     networks:
       - pos-selection-network
-    # Worker, çalışmak için hem koda hem de kuyruğa (redis) ihtiyaç duyar.
     depends_on:
       - app
       - redis
 
+volumes:
+  redis-data:
+
 networks:
   pos-selection-network:
     driver: bridge
-
-volumes:
-  redis-data:
-    driver: local
